@@ -5,6 +5,8 @@ tool, so I generated it as a quick and dirty project.
 
 **You should review the code yourself before running it.**
 
+I've only released it publicly because I figured it could be useful for others.
+
 # busytoggl
 
 Runs a Toggl Track timer while the BUSY Bar timer is running. Pausing or stopping
