@@ -75,6 +75,26 @@ def test_not_started_snapshot_is_stopped(monkeypatch):
     assert not BusyClient("http://busy", None, 1).is_running()
 
 
+@pytest.mark.parametrize(
+    ("current_interval", "expected_running"),
+    [(0, True), (1, False), (2, True)],
+)
+def test_interval_snapshot_alternates_work_and_rest(
+    monkeypatch, current_interval, expected_running
+):
+    monkeypatch.setattr(
+        "busytoggl.clients._json_request",
+        lambda *args, **kwargs: {
+            "snapshot": {
+                "type": "INTERVAL",
+                "is_paused": False,
+                "current_interval": current_interval,
+            }
+        },
+    )
+    assert BusyClient("http://busy", None, 1).is_running() is expected_running
+
+
 @pytest.mark.parametrize("response", [None, {}, {"snapshot": None}, {"snapshot": {}}])
 def test_malformed_busy_snapshot_raises_api_error(monkeypatch, response):
     monkeypatch.setattr("busytoggl.clients._json_request", lambda *args, **kwargs: response)

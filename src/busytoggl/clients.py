@@ -74,7 +74,15 @@ class BusyClient:
         data = _json_request(self.url, headers=self.headers, timeout=self.timeout)
         try:
             snapshot = data["snapshot"]
-            return snapshot["type"] != "NOT_STARTED" and not snapshot.get("is_paused", False)
+            snapshot_type = snapshot["type"]
+            if snapshot_type == "NOT_STARTED" or snapshot.get("is_paused", False):
+                return False
+            if snapshot_type == "INTERVAL":
+                current_interval = snapshot["current_interval"]
+                if not isinstance(current_interval, int) or isinstance(current_interval, bool):
+                    raise TypeError("'current_interval' must be an integer")
+                return current_interval % 2 == 0
+            return True
         except (KeyError, TypeError, AttributeError) as exc:
             raise ApiError(f"Unexpected BUSY snapshot structure: {exc}") from exc
 
