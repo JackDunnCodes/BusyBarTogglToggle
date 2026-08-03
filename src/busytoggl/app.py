@@ -8,12 +8,11 @@ from typing import Protocol
 
 if __package__:
     from .clients import ApiError, BusyClient, TogglClient, automated_description
-    from .config import Config
+    from .config import BillableMode, Config
 else:
-    # Support IDEs configured to execute this file instead of the package module.
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from busytoggl.clients import ApiError, BusyClient, TogglClient, automated_description
-    from busytoggl.config import Config
+    from busytoggl.config import BillableMode, Config
 
 LOG = logging.getLogger("busytoggl")
 
@@ -52,10 +51,25 @@ def _last_valid_entry(toggl: Timer) -> dict:
         ) from exc
 
 
-def synchronize(running: bool, toggl: Timer) -> None:
+def _resolve_billable(mode: BillableMode, template: dict) -> bool | None:
+    if mode is BillableMode.ALWAYS_BILLABLE:
+        return True
+    if mode is BillableMode.ALWAYS_NOT_BILLABLE:
+        return False
+    # COPY_LAST_ENTRY: pass through the template's billable value if present
+    billable = template.get("billable")
+    return bool(billable) if billable is not None else None
+
+
+def synchronize(
+    running: bool,
+    toggl: Timer,
+    billable_mode: BillableMode = BillableMode.COPY_LAST_ENTRY,
+) -> None:
     current = toggl.current()
     if running and current is None:
-        entry = toggl.start(_last_valid_entry(toggl))
+        template = _last_valid_entry(toggl)
+        entry = toggl.start(template, _resolve_billable(billable_mode, template))
         if not isinstance(entry, dict) or entry.get("id") is None:
             raise ApiError("Toggl start response missing 'id'")
         LOG.info("Started Toggl entry %s", entry["id"])
@@ -108,7 +122,7 @@ def run(config: Config, busy: BusyState | None = None, toggl: Timer | None = Non
                 previous_running = running
                 last_sync = now
                 try:
-                    synchronize(running, toggl)
+                    synchronize(running, toggl, config.toggl_billable)
                 except ApiError as exc:
                     LOG.warning("Toggl synchronization failed; retrying later: %s", exc)
         time.sleep(config.poll_interval)

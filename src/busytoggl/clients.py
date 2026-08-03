@@ -116,20 +116,23 @@ class TogglClient:
             raise ApiError("Unexpected Toggl recent entries response")
         return result
 
-    def start(self, template: dict[str, Any]) -> dict[str, Any]:
+    def start(self, template: dict[str, Any], billable: bool | None = None) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "created_with": "busytoggl",
+            "description": automated_description(template["description"]),
+            "duration": -1,
+            "project_id": template["project_id"],
+            "start": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "tags": list(dict.fromkeys([*(template.get("tags") or []), "busytoggl"])),
+            "task_id": template["task_id"],
+            "workspace_id": self.workspace_id,
+        }
+        if billable is not None:
+            body["billable"] = billable
         return self._request(
             f"{self.api_url}/workspaces/{self.workspace_id}/time_entries",
             method="POST",
-            body={
-                "created_with": "busytoggl",
-                "description": automated_description(template["description"]),
-                "duration": -1,
-                "project_id": template["project_id"],
-                "start": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "tags": list(dict.fromkeys([*(template.get("tags") or []), "busytoggl"])),
-                "task_id": template["task_id"],
-                "workspace_id": self.workspace_id,
-            },
+            body=body,
         )
 
     def update(self, entry_id: int, fields: dict[str, Any]) -> dict[str, Any]:

@@ -2,6 +2,24 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from enum import Enum
+
+
+class BillableMode(Enum):
+    ALWAYS_BILLABLE = "Always billable"
+    ALWAYS_NOT_BILLABLE = "Always not billable"
+    COPY_LAST_ENTRY = "Copy last entry"
+
+    @classmethod
+    def from_env(cls, raw: str) -> "BillableMode":
+        normalized = raw.strip().lower()
+        for member in cls:
+            if member.value.lower() == normalized:
+                return member
+        valid = ", ".join(f'"{m.value}"' for m in cls)
+        raise ValueError(
+            f"TOGGL_BILLABLE must be one of {valid}; got {raw!r}"
+        )
 
 
 def _positive_number(name: str, value: str, *, integer: bool = False) -> int | float:
@@ -24,6 +42,7 @@ class Config:
     toggl_sync_interval: float
     toggl_hourly_limit: int
     request_timeout: float
+    toggl_billable: BillableMode
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -46,6 +65,8 @@ class Config:
         request_timeout = float(
             _positive_number("REQUEST_TIMEOUT", os.getenv("REQUEST_TIMEOUT", "10"))
         )
+        billable_raw = os.getenv("TOGGL_BILLABLE", BillableMode.COPY_LAST_ENTRY.value)
+        toggl_billable = BillableMode.from_env(billable_raw)
         return cls(
             busy_url=os.getenv("BUSY_URL", "http://10.0.4.20").rstrip("/"),
             busy_api_token=os.getenv("BUSY_API_TOKEN") or None,
@@ -55,4 +76,5 @@ class Config:
             toggl_sync_interval=toggl_sync_interval,
             toggl_hourly_limit=toggl_hourly_limit,
             request_timeout=request_timeout,
+            toggl_billable=toggl_billable,
         )

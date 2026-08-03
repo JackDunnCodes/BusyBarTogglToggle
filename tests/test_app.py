@@ -1,6 +1,6 @@
 import pytest
 
-from busytoggl.app import run, synchronize
+from busytoggl.app import _resolve_billable, run, synchronize
 from busytoggl.clients import (
     AUTOMATED_MARKER,
     ApiError,
@@ -8,7 +8,7 @@ from busytoggl.clients import (
     HourlyRateLimiter,
     TogglClient,
 )
-from busytoggl.config import Config
+from busytoggl.config import BillableMode, Config
 
 
 class FakeToggl:
@@ -18,6 +18,7 @@ class FakeToggl:
         self.started = 0
         self.stopped = []
         self.updated = []
+        self.last_start_billable = "not_called"
 
     def current(self):
         return self.entry
@@ -25,8 +26,9 @@ class FakeToggl:
     def recent(self):
         return self.entries
 
-    def start(self, template):
+    def start(self, template, billable=None):
         self.started += 1
+        self.last_start_billable = billable
         return {"id": 42}
 
     def update(self, entry_id, fields):
@@ -211,7 +213,7 @@ def test_run_retries_api_error(monkeypatch):
 
 
 def valid_config() -> Config:
-    return Config("http://busy", None, "token", 1, 0.01, 30, 500, 1)
+    return Config("http://busy", None, "token", 1, 0.01, 30, 500, 1, BillableMode.COPY_LAST_ENTRY)
 
 
 def test_hourly_rate_limiter_waits_at_limit(monkeypatch):
@@ -230,6 +232,117 @@ def test_hourly_rate_limiter_waits_at_limit(monkeypatch):
     limiter.acquire()
     limiter.acquire()
     assert sleeps == [10]
+
+
+# --- Billable mode tests ---
+
+
+def test_resolve_billable_always_billable():
+    assert _resolve_billable(BillableMode.ALWAYS_BILLABLE, {"billable": False}) is True
+
+
+def test_resolve_billable_always_not_billable():
+    assert _resolve_billable(BillableMode.ALWAYS_NOT_BILLABLE, {"billable": True}) is False
+
+
+def test_resolve_billable_copy_last_entry_true():
+    assert _resolve_billable(BillableMode.COPY_LAST_ENTRY, {"billable": True}) is True
+
+
+def test_resolve_billable_copy_last_entry_false():
+    assert _resolve_billable(BillableMode.COPY_LAST_ENTRY, {"billable": False}) is False
+
+
+def test_resolve_billable_copy_last_entry_missing():
+    assert _resolve_billable(BillableMode.COPY_LAST_ENTRY, {}) is None
+
+
+def test_synchronize_passes_billable_true_to_start():
+    toggl = FakeToggl(recent=[valid_entry()])
+    synchronize(True, toggl, BillableMode.ALWAYS_BILLABLE)
+    assert toggl.last_start_billable is True
+
+
+def test_synchronize_passes_billable_false_to_start():
+    toggl = FakeToggl(recent=[valid_entry()])
+    synchronize(True, toggl, BillableMode.ALWAYS_NOT_BILLABLE)
+    assert toggl.last_start_billable is False
+
+
+def test_synchronize_copies_billable_from_template():
+    entry = valid_entry()
+    entry["billable"] = True
+    toggl = FakeToggl(recent=[entry])
+    synchronize(True, toggl, BillableMode.COPY_LAST_ENTRY)
+    assert toggl.last_start_billable is True
+
+
+def test_synchronize_copy_last_entry_none_when_missing():
+    toggl = FakeToggl(recent=[valid_entry()])  # no 'billable' key
+    synchronize(True, toggl, BillableMode.COPY_LAST_ENTRY)
+    assert toggl.last_start_billable is None
+
+
+def test_billable_mode_from_env_case_insensitive():
+    assert BillableMode.from_env("always billable") is BillableMode.ALWAYS_BILLABLE
+    assert BillableMode.from_env("ALWAYS NOT BILLABLE") is BillableMode.ALWAYS_NOT_BILLABLE
+    assert BillableMode.from_env("Copy Last Entry") is BillableMode.COPY_LAST_ENTRY
+
+
+def test_billable_mode_from_env_invalid():
+    with pytest.raises(ValueError, match="TOGGL_BILLABLE must be one of"):
+        BillableMode.from_env("sometimes")
+
+
+def test_config_billable_default(monkeypatch):
+    monkeypatch.setenv("TOGGL_API_TOKEN", "token")
+    monkeypatch.setenv("TOGGL_WORKSPACE_ID", "1")
+    monkeypatch.delenv("TOGGL_BILLABLE", raising=False)
+    config = Config.from_env()
+    assert config.toggl_billable is BillableMode.COPY_LAST_ENTRY
+
+
+def test_config_billable_always_billable(monkeypatch):
+    monkeypatch.setenv("TOGGL_API_TOKEN", "token")
+    monkeypatch.setenv("TOGGL_WORKSPACE_ID", "1")
+    monkeypatch.setenv("TOGGL_BILLABLE", "Always billable")
+    config = Config.from_env()
+    assert config.toggl_billable is BillableMode.ALWAYS_BILLABLE
+
+
+def test_config_billable_invalid(monkeypatch):
+    monkeypatch.setenv("TOGGL_API_TOKEN", "token")
+    monkeypatch.setenv("TOGGL_WORKSPACE_ID", "1")
+    monkeypatch.setenv("TOGGL_BILLABLE", "sometimes")
+    with pytest.raises(ValueError, match="TOGGL_BILLABLE must be one of"):
+        Config.from_env()
+
+
+def test_start_sends_billable_field(monkeypatch):
+    captured = {}
+
+    def capture_request(*args, **kwargs):
+        captured.update(kwargs["body"])
+        return {"id": 42}
+
+    monkeypatch.setattr("busytoggl.clients._json_request", capture_request)
+    TogglClient("token", 1, 1).start(valid_entry(), billable=True)
+    assert captured["billable"] is True
+
+
+def test_start_omits_billable_field_when_none(monkeypatch):
+    captured = {}
+
+    def capture_request(*args, **kwargs):
+        captured.update(kwargs["body"])
+        return {"id": 42}
+
+    monkeypatch.setattr("busytoggl.clients._json_request", capture_request)
+    TogglClient("token", 1, 1).start(valid_entry(), billable=None)
+    assert "billable" not in captured
+
+
+# --- Config validation tests ---
 
 
 def test_config_requires_token(monkeypatch):
