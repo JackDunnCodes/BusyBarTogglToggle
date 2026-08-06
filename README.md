@@ -1,5 +1,7 @@
 # busytoggl
 
+[https://github.com/JackDunnCodes/BusyBarTogglToggle](https://github.com/JackDunnCodes/BusyBarTogglToggle)
+
 Runs a Toggl Track timer while the BUSY Bar timer is running. Pausing or stopping
 the BUSY timer stops the current Toggl timer. The bridge only reads
 the BUSY Bar snapshot endpoint; it never sends display, audio, or input commands
