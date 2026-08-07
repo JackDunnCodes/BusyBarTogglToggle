@@ -1,6 +1,7 @@
 # busytoggl
 
-[https://github.com/JackDunnCodes/BusyBarTogglToggle](https://github.com/JackDunnCodes/BusyBarTogglToggle)
+The code's here: [https://github.com/JackDunnCodes/BusyBarTogglToggle](https://github.com/JackDunnCodes/BusyBarTogglToggle)
+The releases are here: [https://github.com/JackDunnCodes/BusyBarTogglToggle/releases](https://github.com/JackDunnCodes/BusyBarTogglToggle/releases)
 
 Runs a Toggl Track timer while the BUSY Bar timer is running. Pausing or stopping
 the BUSY timer stops the current Toggl timer. The bridge only reads
@@ -20,14 +21,9 @@ I've only released it publicly because I figured it could be useful for others.
 
 Requires Python 3.11 or newer.
 
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install -e .
-$env:TOGGL_API_TOKEN = "your token"
-$env:TOGGL_WORKSPACE_ID = "your workspace ID"
-busytoggl
-```
+1. rename .env.example to just .env
+2. Provide the config values it asks for
+3. if windows, run `run_busytoggl.bat`. If other OS, run something else
 
 Your API token is at **Toggl Track > Profile settings > API Token**. The workspace
 ID is the number in a Toggl workspace URL. See `.env.example` for all settings.
