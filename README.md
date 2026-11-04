@@ -45,3 +45,7 @@ When starting, the bridge copies the project, task, tags, and description from
 the most recent valid Toggl entry. It appends `[Automated entry, please recheck]`
 to the description and adds the `busytoggl` tag. This satisfies workspaces that
 require a project, task, and description.
+
+## You might also like...
+
+- [just trees](https://justtrees.pages.dev/), a tool to help visualise data structures such as URL parameters, PHP dumps, and JSON
